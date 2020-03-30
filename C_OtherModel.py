@@ -24,11 +24,11 @@ class FactorizedEmbedding(nn.Module):
         linerTensor = self.liner(embedTensor)
         return linerTensor
 
-def add_nTensors(tensorsList):
-    addR = tensorsList[0] + tensorsList[1]
-    for t in range(2,len(tensorsList)):
-        addR = addR + tensorsList[t]
-    return addR
+def add_n(tensorsList):
+    return torch.stack(tensorsList,dim=-1).sum(dim=-1,keepdim=False)
+
+def mean_n(tensorsList):
+    return torch.stack(tensorsList,dim=-1).mean(dim=-1,keepdim=False)
 
 import math
 # Temporarily leave PositionalEncoding module here. Will be moved somewhere else.
@@ -77,7 +77,6 @@ class ALBERT(nn.Module):
         super(ALBERT,self).__init__()
         self.cross_layers = cross_layers
         self.parallel_transformers = parallel_Transformers
-        self.div = float(parallel_Transformers)
         self.total_layers = total_layers
 
         self.num_labels = num_labels
@@ -101,7 +100,7 @@ class ALBERT(nn.Module):
                 for m in oneLayerEncoders:
                     outT = m(inputTensor)
                     tempTensors.append(outT)
-                inputTensor = add_nTensors(tempTensors) / self.div
+                inputTensor = mean_n(tempTensors)
         encodedTensor = inputTensor.clone()
         _ , s , h = encodedTensor.shape
         flatten = encodedTensor.view([-1,s*h])
@@ -111,12 +110,14 @@ class ALBERT(nn.Module):
 
 
 if __name__ == "__main__":
-    import numpy as np
-    testInput = torch.from_numpy(np.ones(shape=[4,10])).long()
-    model = ALBERT(vocab_size=10,embed_size=5,d_model=512,num_labels=2,sequence_len=10,drop_p=0.1)
-    result = model(testInput)
-    print(result)
-    print(result.shape)
+    # import numpy as np
+    # testInput = torch.from_numpy(np.ones(shape=[4,10])).long()
+    # model = ALBERT(vocab_size=10,embed_size=5,d_model=512,num_labels=2,sequence_len=10,drop_p=0.1)
+    # result = model(testInput)
+    # print(result)
+    # print(result.shape)
+    testList = [torch.ones([5,6,7]).float() for _ in range(10)]
+    print(torch.stack(testList,dim=-1).mean(dim=-1,keepdim=False).shape)
 
 
 
