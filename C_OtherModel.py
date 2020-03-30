@@ -78,7 +78,6 @@ class ALBERT(nn.Module):
         self.cross_layers = cross_layers
         self.parallel_transformers = parallel_Transformers
         self.total_layers = total_layers
-
         self.num_labels = num_labels
         self.embedding = FactorizedEmbedding(vocab_size,embed_size,d_model)
         self.positionalEmbedding = PositionalEncoding(d_model,max_len=sequence_len,dropout=0.2)
