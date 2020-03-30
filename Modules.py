@@ -5,11 +5,10 @@ import math
 
 class Attention(nn.Module):
 
-    def __init__(self,dk,dropout_p):
+    def __init__(self,dk,drop_p):
         super(Attention,self).__init__()
         self.dk = math.sqrt(dk)
-        self.dropout = nn.Dropout(dropout_p)
-
+        self.dropout = nn.Dropout(drop_p)
 
     def forward(self, Q, K, V):
         """
@@ -18,52 +17,54 @@ class Attention(nn.Module):
         :param V: A 3d tensor with shape of [N, T_k, d_model].
         :return:
         """
-        QKt = torch.matmul(Q,torch.transpose(K,dim0=1,dim1=2)) / self.dk  # (N, T_q, T_k)
+        QKt = torch.matmul(Q,torch.transpose(K,dim0=-2,dim1=-1)) / self.dk  # (N, T_q, T_k)
         output = torch.softmax(QKt,dim=-1)
         output = self.dropout(output)
         output = torch.matmul(output,V) # (N, T_q, d_v)
         return output
 
-class Head(nn.Module):
+class Heads(nn.Module):
 
-    def __init__(self,d_model,dk,dv,drop_p):
-        super(Head,self).__init__()
-        self.QLinear = nn.Linear(d_model,dk)
-        self.KLinear = nn.Linear(d_model,dk)
-        self.VLinear = nn.Linear(d_model,dv)
+    def __init__(self,h,d_model,dk,drop_p):
+        super(Heads,self).__init__()
+        self.h = h
+        self.dk = dk
+        self.d_model = d_model
+        self.QLinear = nn.Linear(d_model,d_model)
+        self.KLinear = nn.Linear(d_model,d_model)
+        self.VLinear = nn.Linear(d_model,d_model)
         self.attention = Attention(dk,drop_p)
 
     def forward(self, Q, K , V):
-        qProject = self.QLinear(Q)
-        kProject = self.KLinear(K)
-        vProject = self.VLinear(V)
-        attention = self.attention(qProject,kProject,vProject)
-        return attention
+        bs = Q.size(0)
+        qL = self.QLinear(Q).view([bs,-1,self.h,self.dk]).transpose(1,2)
+        kL = self.KLinear(K).view([bs,-1,self.h,self.dk]).transpose(1,2)
+        vL = self.VLinear(V).view([bs,-1,self.h,self.dk]).transpose(1,2)
+        scores = self.attention(qL,kL,vL)
+        catTensor = scores.transpose(1,2).contiguous().view([bs,-1,self.d_model])
+        return catTensor
+
 
 class MultiHeadAttention(nn.Module):
 
     def __init__(self,h = 8, d_model = 64 * 8,drop_p = 0.1):
         super(MultiHeadAttention,self).__init__()
-        dk = dv = d_model // h
-        self.outLinear = nn.Linear(h * dv , d_model)
-        self.heads = nn.ModuleList([Head(d_model,dk,dv,drop_p) for _ in range(h)])
-
+        dk = d_model // h
+        self.outLinear = nn.Linear(d_model , d_model)
+        self.heads = Heads(h,d_model,dk,drop_p)
 
     def forward(self,x):
         q = x
         k = torch.clone(x)
         v = torch.clone(x)
-        projectionList = []
-        for oneHead in self.heads:
-            projectionList.append(oneHead(q,k,v))
-        catTensor = torch.cat(projectionList,dim=-1)
-        return self.outLinear(catTensor)
+        head = self.heads(q,k,v)
+        return self.outLinear(head)
 
 class FeedForward(nn.Module):
 
     def __init__(self,d_model,drop_p = 0.1):
         super(FeedForward,self).__init__()
-        dff = 2048
+        dff = d_model * 4
         self.linear1 = nn.Linear(d_model,dff)
         self.linear2 = nn.Linear(dff,d_model)
         self.activation = nn.GELU()
@@ -93,6 +94,7 @@ class TransformerBlock(nn.Module):
         self.sub1Ffw= FeedForward(d_model,drop_p)
         self.lnsub1 = nn.LayerNorm(d_model)
         self.actSub1 = nn.GELU()
+        self.sub1Dropout = nn.Dropout(drop_p)
         ### sub 2
         self.p2 = nn.Parameter(data=torch.tensor(data=0.), requires_grad=True)
         self.sub2Dropout = nn.Dropout(drop_p)
@@ -111,36 +113,23 @@ class TransformerBlock(nn.Module):
         ln2 = self.ln2(fft + out1)
         out2 = out1 + torch.mul(ln2,self.alphaB)
         ### sub 1
-        sub1F = self.sub1Ffw(x)
+        sub1F = self.sub1Ffw(x.clone())
         sub1Ln = self.lnsub1(sub1F)
         sub1Act = self.actSub1(sub1Ln)
-        sub1Out = torch.mul(self.p1,sub1Act)
+        sub1Out = torch.mul(self.p1,self.sub1Dropout(sub1Act))
         ### sub 2
-        sub2Drop = self.sub2Dropout(x)
-        sub2Lin = self.sub2Linear(sub2Drop)
+        sub2Lin = self.sub2Linear(x.clone())
         sub2Ln = self.lnsub2(sub2Lin)
         sub2Act = self.actSub2_1(sub2Ln)
-        sub2Out = torch.mul(self.p2,sub2Act)
+        sub2Out = torch.mul(self.p2,self.sub2Dropout(sub2Act))
         return out2 + sub1Out + sub2Out
 
 
-class TransformerEncoder(nn.Module):
-
-    def __init__(self,layerNumber = 3,h = 8,d_model = 512,drop_p = 0.1):
-        super(TransformerEncoder,self).__init__()
-        self.layerNumber = layerNumber
-        self.transformers = nn.ModuleList([TransformerBlock(h,d_model,drop_p=drop_p) for _ in range(layerNumber)])
-
-    def forward(self, x):
-        feature = x.clone()
-        for transformer in self.transformers:
-            feature = transformer(feature)
-        return feature
 
 
 if __name__ == "__main__":
     testInput = torch.randn(size=[5,10,64*8])
-    testMul = TransformerEncoder()
+    testMul = TransformerBlock()
     print(testMul)
     print(testMul(testInput).shape)
 

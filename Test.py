@@ -300,6 +300,5 @@ for _ in range(100):
 
 
 print(torch.zeros([2,3,4]) * torch.ones([2,3,4]))
-torch.device("cuda")
 
 

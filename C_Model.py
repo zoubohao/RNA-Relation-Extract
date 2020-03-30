@@ -24,7 +24,6 @@ class FeedForward(nn.Module):
         self.act = MishActivation()
         self.act1 = MishActivation()
 
-
     def forward(self, x):
         liner1T = self.liner1(x)
         bnT = self.ln(liner1T)
@@ -40,7 +39,6 @@ class TransformerEncoder(nn.Module):
     def __init__(self,hidden_size,num_heads):
         super(TransformerEncoder,self).__init__()
         ##1
-
         self.multiA0 = nn.MultiheadAttention(hidden_size,num_heads=num_heads,dropout=0.2)
         self.mulLn = nn.LayerNorm(hidden_size)
         self.fft0 = FeedForward(hidden_size, dropout=0.2)
@@ -193,12 +191,10 @@ class ALBERT(nn.Module):
 
 if __name__ == "__main__":
     device = torch.device("cuda")
-    print(MishActivation()(torch.from_numpy(np.array([[-2,-1,0],[1,2,3]])).float().to(device)))
     testInput = torch.from_numpy(np.ones(shape=[4,10])).long().to(device)
-    testLabel = torch.from_numpy(np.ones(shape=[4])).long().to(device)
-    ny = np.array([13000,130000,13000,130000])
     model = ALBERT(vocab_size=10,embed_size=5,hidden_size=128,num_heads=4,encoder_layers=8,num_encoder=3,num_labels=2,sequence_len=10).to(device)
-    testCFFT = torch.ones(size=[11,45,128]).float()
+
+
 
 
 

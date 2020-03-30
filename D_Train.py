@@ -1,9 +1,11 @@
-from C_Model import ALBERT
+#from C_Model import ALBERT
 import torch
 import torch.nn as nn
 import math
 import numpy as np
 import sklearn.metrics as metrics
+from torch.optim.rmsprop import  RMSprop
+from C_OtherModel import ALBERT
 
 
 # import os
@@ -19,14 +21,16 @@ max_sequence_length = 42
 display_step = 25
 batch_size = 8
 embedding_size = 10
-hidden_size = 128
+#hidden_size = 128
+hidden_size = 512
 num_labels = 2
 epoch = 2
 lr = 1e-4
 decay_rate = 0.1
-decay_step = 18260
-save_model_steps = 2025
+decay_step = 18262
+save_model_steps = 1000
 trainOrTest = "train"
+### Test
 testModelSelect = 0.952
 
 
@@ -100,18 +104,20 @@ def DataGenerator(sample_list,label_list):
             yield sampleT , label_list[s]
 
 device = torch.device("cuda")
-model = ALBERT(vocab_size=vocabulary_len,embed_size=embedding_size,hidden_size=hidden_size,
-               num_heads=8,sequence_len=max_sequence_length,encoder_layers=10,num_encoder=8,num_labels=num_labels).to(device)
-# for m in model.modules():
-#     if isinstance(m , nn.Linear):
-#         nn.init.kaiming_normal_(m.weight)
-#         nn.init.constant_(m.weight, 0.)
+# model = ALBERT(vocab_size=vocabulary_len,embed_size=embedding_size,hidden_size=hidden_size,
+#                num_heads=8,sequence_len=max_sequence_length,encoder_layers=10,num_encoder=8,num_labels=num_labels).to(device)
+model = ALBERT(vocab_size=vocabulary_len,embed_size=embedding_size,d_model=hidden_size,num_labels=num_labels,sequence_len=max_sequence_length,
+               drop_p=0.15,cross_layers=6,parallel_Transformers=7,total_layers=4).to(device)
+for m in model.modules():
+    if isinstance(m , nn.Linear):
+        nn.init.kaiming_normal_(m.weight)
+        nn.init.constant_(m.bias, 0.)
 print(model)
 # weight=torch.from_numpy(np.array([positive_sample_size / negative_sample_size + 0.15, 1.])).float()
 # 0.0966234
 # 5 / 11
-lossCri = nn.CrossEntropyLoss(reduction = "mean",weight=torch.from_numpy(np.array([1.5 / 6.5 - 0.005,1.0])).float()).to(device)
-optimizer = torch.optim.SGD(model.parameters(), lr = lr,weight_decay=5e-3,nesterov=True,momentum=0.9)
+lossCri = nn.CrossEntropyLoss(reduction = "sum",weight=torch.from_numpy(np.array([1.5 / 6.5 - 0.005,1.0])).float()).to(device)
+optimizer = RMSprop(model.parameters(), lr = lr,weight_decay=5e-3,momentum=0.85,eps=1e-6,alpha=0.96)
 #optimizer = torch.optim.SGD()
 
 index = [i for i in range(batch_size)]
@@ -148,6 +154,7 @@ if trainOrTest.lower() == "train":
             loss.backward()
             optimizer.step()
             if trainingTimes % display_step == 0:
+                print("#################")
                 print("Predict tensor is ", predictTensor)
                 print("Labels are ", batchLabels)
                 print("Learning rate is ", optimizer.state_dict()['param_groups'][0]["lr"])
@@ -200,6 +207,20 @@ else:
     print("Recall is : ",recall)
     f1_score = metrics.f1_score(y_true=truthLabels,y_pred=predictLabels)
     print("F1 score is ",f1_score)
+    fpr, tpr, thresholds = metrics.roc_curve(y_true=truthLabels,y_score=predictLabels,pos_label=1)
+    auc = metrics.auc(fpr,tpr)
+    import matplotlib.pyplot as plt
+    plt.figure()
+    plt.plot(fpr, tpr, color='darkorange',
+             lw=2, label='ROC curve (area = %0.2f)' % auc)
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC of This ALBERT')
+    plt.legend(loc="lower right")
+    plt.show()
 
 
 
