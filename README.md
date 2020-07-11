@@ -1,2 +1,3 @@
 # RNA_Relation_Extract
-This project will use ALBERT to judge if one sentence depicts the RNA and RNA interaction.
+This project used ALBERT to judge if one sentence depicts the RNA and RNA interaction.
+This will be publiched on a paper.
